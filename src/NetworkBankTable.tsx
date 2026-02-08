@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { SortingState, RowSelectionState, ColumnDef } from "@tanstack/react-table";
-import {flexRender,getCoreRowModel,useReactTable,getSortedRowModel} from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, getSortedRowModel } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     Box,
@@ -17,6 +17,19 @@ import type { NetworkBankRow } from "./mockNetworkBank";
 
 const DASH = "—";
 const FIXED_TABLE_WIDTH = 1080;
+
+const UI = {
+    bg: "#0B1220",
+    panel: "#0F172A",
+    header: "rgb(7, 40, 94)",
+    border: "rgba(255,255,255,0.10)",
+    borderSoft: "rgba(255,255,255,0.06)",
+    text: "rgba(255,255,255,0.92)",
+    textMuted: "rgba(255,255,255,0.70)",
+    hover: "rgba(255,255,255,0.04)",
+    selected: "rgba(59,130,246,0.18)",
+    selectedHover: "rgba(59,130,246,0.24)",
+};
 
 function formatFreq(row: NetworkBankRow): string {
     if (row.centerFrequency !== null) return String(row.centerFrequency);
@@ -79,7 +92,7 @@ export function NetworkBankTable({
     data: NetworkBankRow[];
     dense?: boolean;
     height?: number;
-    }) {
+}) {
     const columns = React.useMemo<ColumnDef<NetworkBankRow>[]>(
         () => [
             {
@@ -262,8 +275,29 @@ export function NetworkBankTable({
 
 
     return (
-        <Paper elevation={1}>
-            <Typography sx={{ p: 1.5 }} variant="subtitle1">
+        <Paper
+            elevation={0}
+            sx={{
+                width: FIXED_TABLE_WIDTH,
+                bgcolor: UI.panel,
+                color: UI.text,
+                border: `1px solid ${UI.borderSoft}`,
+                borderRadius: 2.5,
+                overflow: "hidden",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+            }}
+        >
+            <Typography
+                sx={{
+                    px: 2,
+                    py: 1.25,
+                    fontWeight: 700,
+                    letterSpacing: 0.2,
+                    borderBottom: `1px solid ${UI.borderSoft}`,
+                    bgcolor: "rgba(255,255,255,0.03)",
+                }}
+                variant="subtitle1"
+            >
                 Network Bank
             </Typography>
 
@@ -272,7 +306,29 @@ export function NetworkBankTable({
                 sx={{
                     height,
                     overflow: "auto",
-                    width: FIXED_TABLE_WIDTH,
+                    width: "100%",
+                    bgcolor: UI.panel,
+
+                    // Firefox
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "rgba(255,255,255,0.22) rgba(255,255,255,0.06)",
+
+                    // Chrome / Edge / Safari
+                    "&::-webkit-scrollbar": { width: "10px", height: "10px" },
+                    "&::-webkit-scrollbar-track": {
+                        backgroundColor: "rgba(255,255,255,0.05)",
+                        borderRadius: "999px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                        backgroundColor: "rgba(255,255,255,0.14)",
+                        borderRadius: "999px",
+                        border: "2px solid rgba(0,0,0,0)",
+                        backgroundClip: "padding-box",
+                    },
+                    "&:hover::-webkit-scrollbar-thumb": {
+                        backgroundColor: "rgba(255,255,255,0.26)",
+                    },
+                    "&::-webkit-scrollbar-corner": { backgroundColor: "transparent" },
                 }}
             >
                 <Table
@@ -297,17 +353,34 @@ export function NetworkBankTable({
                                             onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                                             key={header.id}
                                             sx={{
-                                                cursor: header.column.getCanSort() ? "pointer" : "default",
+                                                cursor: canSort ? "pointer" : "default",
                                                 userSelect: "none",
+
                                                 width: COL_W[id] ?? 120,
                                                 minWidth: COL_W[id] ?? 120,
                                                 maxWidth: COL_W[id] ?? 120,
+
                                                 fontWeight: 700,
-                                                fontSize,
+                                                fontSize: 12,
+                                                letterSpacing: 0.25,
+                                                textTransform: "uppercase",
+                                                color: UI.textMuted,
+
                                                 textAlign: "center",
-                                                py: cellPy,
+                                                py: 1,
                                                 whiteSpace: "nowrap",
-                                                bgcolor: "background.paper",
+                                                bgcolor: UI.header,
+
+                                                borderBottom: `1px solid ${UI.border}`,
+                                                borderRight: `1px solid ${UI.borderSoft}`,
+
+                                                "&:last-of-type": { borderRight: "none" },
+
+                                                ...(canSort
+                                                    ? {
+                                                        "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
+                                                    }
+                                                    : {}),
                                             }}
                                         >
                                             {header.isPlaceholder
@@ -349,6 +422,16 @@ export function NetworkBankTable({
                                         left: 0,
                                         transform: `translateY(${vi.start}px)`,
                                         width: tableWidth,
+
+                                        cursor: "pointer",
+
+                                        bgcolor: row.getIsSelected()
+                                            ? UI.selected
+                                            : "transparent",
+
+                                        "&:hover": {
+                                            bgcolor: row.getIsSelected() ? UI.selectedHover : UI.hover,
+                                        },
                                     }}
                                 >
                                     {row.getVisibleCells().map((cell) => {
