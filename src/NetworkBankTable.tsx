@@ -1,12 +1,6 @@
 import * as React from "react";
-import type { SortingState } from "@tanstack/react-table";
-import { getSortedRowModel } from "@tanstack/react-table";
-import {
-    flexRender,
-    getCoreRowModel,
-    useReactTable,
-} from "@tanstack/react-table";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { SortingState, RowSelectionState, ColumnDef } from "@tanstack/react-table";
+import {flexRender,getCoreRowModel,useReactTable,getSortedRowModel} from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     Box,
@@ -22,7 +16,7 @@ import {
 import type { NetworkBankRow } from "./mockNetworkBank";
 
 const DASH = "—";
-const FIXED_TABLE_WIDTH = 1020;
+const FIXED_TABLE_WIDTH = 1080;
 
 function formatFreq(row: NetworkBankRow): string {
     if (row.centerFrequency !== null) return String(row.centerFrequency);
@@ -62,6 +56,7 @@ function last4(id: string): string {
  * You can tweak these later after you see it on screen.
  */
 const COL_W = {
+    select: 20,
     id: 20,
     p: 15,
     tx: 30,
@@ -84,9 +79,35 @@ export function NetworkBankTable({
     data: NetworkBankRow[];
     dense?: boolean;
     height?: number;
-}) {
+    }) {
     const columns = React.useMemo<ColumnDef<NetworkBankRow>[]>(
         () => [
+            {
+                id: "select",
+                header: ({ table }) => (
+                    <input
+                        type="checkbox"
+                        onClick={(e) => e.stopPropagation()}
+                        checked={table.getIsAllRowsSelected()}
+                        ref={(el) => {
+                            if (!el) return;
+                            el.indeterminate = table.getIsSomeRowsSelected();
+                        }}
+                        onChange={table.getToggleAllRowsSelectedHandler()}
+                    />
+                ),
+                cell: ({ row }) => (
+                    <input
+                        type="checkbox"
+                        checked={row.getIsSelected()}
+                        disabled={!row.getCanSelect()}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={row.getToggleSelectedHandler()}
+                    />
+                ),
+                enableSorting: false,
+                enableColumnFilter: false,
+            },
             // 1) NetworkId --> Id , cell only last 4 chars
             {
                 id: "id",
@@ -102,7 +123,7 @@ export function NetworkBankTable({
             { id: "tx", header: "TX Type", accessorKey: "txType" },
 
             // 4) Freq (MHz)
-          {
+            {
                 id: "freq",
                 header: "Freq (MHz)",
                 accessorFn: (row) => {
@@ -186,17 +207,21 @@ export function NetworkBankTable({
     );
 
     const [sorting, setSorting] = React.useState<SortingState>([]);
+    const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
-    
     const table = useReactTable({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
+        getRowId: (row) => row.knowNetworkId,
         state: {
             sorting,
+            rowSelection
         },
         onSortingChange: setSorting,
         getSortedRowModel: getSortedRowModel(),
+        onRowSelectionChange: setRowSelection,
+        enableRowSelection: true,
 
     });
     const rows = table.getRowModel().rows;
@@ -221,6 +246,7 @@ export function NetworkBankTable({
 
     // Total fixed width for the table (sum of all cols)
     const tableWidth =
+        COL_W.select +
         COL_W.id +
         COL_W.p +
         COL_W.tx +
@@ -233,6 +259,7 @@ export function NetworkBankTable({
         COL_W.traffic +
         COL_W.ltoi +
         COL_W.jam;
+
 
     return (
         <Paper elevation={1}>
@@ -263,8 +290,6 @@ export function NetworkBankTable({
                                 {hg.headers.map((header) => {
                                     const id = header.column.id as keyof typeof COL_W;
                                     const canSort = header.column.getCanSort();
-
-                                    console.log(header.column.id, "canSort:", header.column.getCanSort());
 
                                     return (
                                         <TableCell
@@ -316,6 +341,7 @@ export function NetworkBankTable({
                                     key={row.id}
                                     component="div"
                                     hover
+                                    onClick={() => row.toggleSelected()}
                                     sx={{
                                         display: "flex",
                                         position: "absolute",
@@ -345,12 +371,13 @@ export function NetworkBankTable({
                                                     textAlign: "center",
                                                     alignItems: "center",
                                                     fontSize,
-                                                    py: cellPy,
+                                                    // py: cellPy,
                                                     whiteSpace: "nowrap",
-                                                    overflow: "hidden",
+                                                    // overflow: "hidden",
                                                     textOverflow: "ellipsis",
                                                     borderBottom: "1px solid",
-                                                    borderColor: "divider",
+                                                    // borderColor: "divider",
+                                                    backgroundColor: `${row.getIsSelected() ? '#35457c' : undefined}`,
                                                 }}
                                             >
                                                 {renderer
