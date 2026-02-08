@@ -1,10 +1,11 @@
 import * as React from "react";
 import {flexRender,getCoreRowModel,useReactTable} from "@tanstack/react-table";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  Box,
   Paper,
   Table,
-  TableBody,
   TableCell,
   TableContainer,
   TableHead,
@@ -17,10 +18,8 @@ import type { NetworkBankRow } from "./mockNetworkBank";
 const DASH = "—";
 
 function formatFreq(row: NetworkBankRow): string {
-  // Rule 1: center exists -> show center
   if (row.centerFrequency !== null) return String(row.centerFrequency);
 
-  // Rule 2: otherwise take first-last and (size)
   const arr = row.frequenciesMhz;
   if (Array.isArray(arr) && arr.length > 0) {
     const first = arr[0];
@@ -28,7 +27,6 @@ function formatFreq(row: NetworkBankRow): string {
     return `${first}–${last} (${arr.length})`;
   }
 
-  // Rule 3: missing
   return DASH;
 }
 
@@ -36,30 +34,28 @@ function formatDate(iso: string | null): string {
   if (!iso) return DASH;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return DASH;
-  // simple readable local format
   return d.toLocaleString();
 }
 
 export function NetworkBankTable({
   data,
   dense = true,
+  height = 600,
 }: {
   data: NetworkBankRow[];
   dense?: boolean;
+  height?: number;
 }) {
   const columns = React.useMemo<ColumnDef<NetworkBankRow>[]>(
     () => [
       { header: "Network ID", accessorKey: "knowNetworkId" },
       { header: "Priority", accessorKey: "comintPriority" },
       { header: "TX Type", accessorKey: "txType" },
-
-      // Computed column (Freq)
       {
         id: "freq",
         header: "Freq (MHz)",
         cell: ({ row }) => formatFreq(row.original),
       },
-
       { header: "Hop Rate", accessorKey: "hopRate" },
       { header: "Bandwidth (kHz)", accessorKey: "bandwidthKhz" },
       { header: "Modulation", accessorKey: "modulation" },
@@ -86,75 +82,128 @@ export function NetworkBankTable({
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const rows = table.getRowModel().rows;
+
+  // Density / sizing
   const fontSize = dense ? 12 : 14;
   const cellPy = dense ? 0.75 : 1.25;
+  const rowHeight = dense ? 36 : 44; // estimate for virtualizer
+
+  // Scroll container ref
+  const parentRef = React.useRef<HTMLDivElement | null>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => rowHeight,
+    overscan: 12,
+  });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
 
   return (
-    <TableContainer component={Paper} elevation={1}>
+    <Paper elevation={1}>
       <Typography sx={{ p: 1.5 }} variant="subtitle1">
         Network Bank
       </Typography>
 
-      <Table size={dense ? "small" : "medium"} stickyHeader>
-        <TableHead>
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {hg.headers.map((header) => (
-                <TableCell
-                  key={header.id}
-                  sx={{
-                    fontWeight: 700,
-                    fontSize,
-                    py: cellPy,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableHead>
-
-        <TableBody>
-          {table.getRowModel().rows.map((r) => (
-            <TableRow key={r.id} hover>
-              {r.getVisibleCells().map((cell) => {
-                const value = cell.getValue();
-                const isNullish = value === null || value === undefined;
-
-                const renderer = cell.column.columnDef.cell;
-
-                return (
+      {/* Scroll container */}
+      <TableContainer
+        ref={parentRef}
+        sx={{
+          height,
+          overflow: "auto",
+        }}
+      >
+        <Table stickyHeader size={dense ? "small" : "medium"}>
+          <TableHead>
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id}>
+                {hg.headers.map((header) => (
                   <TableCell
-                    key={cell.id}
+                    key={header.id}
                     sx={{
+                      fontWeight: 700,
                       fontSize,
                       py: cellPy,
                       whiteSpace: "nowrap",
+                      bgcolor: "background.paper",
                     }}
                   >
-                    {cell.column.id === "freq" ||
-                    cell.column.id === "lastInterceptionTime" ||
-                    cell.column.id === "jammingTarget" ? (
-                      flexRender(cell.column.columnDef.cell, cell.getContext())
-                    ) : isNullish ? (
-                      DASH
-                    ) : (
-                      flexRender(renderer, cell.getContext())
-                    )}
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                   </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                ))}
+              </TableRow>
+            ))}
+          </TableHead>
+
+          {/* Virtualized "body" as divs (to allow absolute positioning) */}
+          <Box
+            component="tbody"
+            sx={{
+              display: "block",
+              position: "relative",
+              height: totalSize,
+            }}
+          >
+            {virtualItems.map((vi) => {
+              const row = rows[vi.index];
+
+              return (
+                <TableRow
+                  key={row.id}
+                  component="div"
+                  hover
+                  sx={{
+                    display: "flex",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vi.start}px)`,
+                  }}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    const value = cell.getValue();
+                    const renderer = cell.column.columnDef.cell;
+
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        component="div"
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          fontSize,
+                          py: cellPy,
+                          whiteSpace: "nowrap",
+                          // IMPORTANT: to avoid columns collapsing when using flex rows
+                          flex: 1,
+                          minWidth: 120,
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                        }}
+                      >
+                        {renderer
+                          ? flexRender(renderer, cell.getContext())
+                          : value === null || value === undefined
+                            ? DASH
+                            : String(value)}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              );
+            })}
+          </Box>
+        </Table>
+      </TableContainer>
+    </Paper>
   );
 }
