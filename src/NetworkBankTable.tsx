@@ -1,4 +1,6 @@
 import * as React from "react";
+import type { SortingState } from "@tanstack/react-table";
+import { getSortedRowModel } from "@tanstack/react-table";
 import {
     flexRender,
     getCoreRowModel,
@@ -100,10 +102,18 @@ export function NetworkBankTable({
             { id: "tx", header: "TX Type", accessorKey: "txType" },
 
             // 4) Freq (MHz)
-            {
+          {
                 id: "freq",
                 header: "Freq (MHz)",
+                accessorFn: (row) => {
+                    return row.centerFrequency ?? (row.frequenciesMhz?.[0] ?? null);
+                },
                 cell: ({ row }) => formatFreq(row.original),
+                sortingFn: (a, b, columnId) => {
+                    const av = a.getValue<number | null>(columnId) ?? Number.NEGATIVE_INFINITY;
+                    const bv = b.getValue<number | null>(columnId) ?? Number.NEGATIVE_INFINITY;
+                    return av - bv;
+                },
             },
 
             // 5) Hop Rate(#/sec)
@@ -152,7 +162,13 @@ export function NetworkBankTable({
             {
                 id: "ltoi",
                 header: "LTOI",
+                accessorFn: (row) => (row.lastInterceptionTime ? Date.parse(row.lastInterceptionTime) : null),
                 cell: ({ row }) => formatDateShort(row.original.lastInterceptionTime),
+                sortingFn: (a, b, columnId) => {
+                    const av = a.getValue<number | null>(columnId) ?? Number.NEGATIVE_INFINITY;
+                    const bv = b.getValue<number | null>(columnId) ?? Number.NEGATIVE_INFINITY;
+                    return av - bv;
+                },
             },
 
             // 12) Jamming --> Jam Tar.
@@ -160,17 +176,29 @@ export function NetworkBankTable({
                 id: "jam",
                 header: "Jam Tar.",
                 cell: ({ row }) => (row.original.jammingTarget ? "Yes" : "No"),
-            },
+                sortingFn: "basic",
+                accessorFn: (row) => {
+                    return row.jammingTarget
+                },
+            }
         ],
         []
     );
 
+    const [sorting, setSorting] = React.useState<SortingState>([]);
+
+    
     const table = useReactTable({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
-    });
+        state: {
+            sorting,
+        },
+        onSortingChange: setSorting,
+        getSortedRowModel: getSortedRowModel(),
 
+    });
     const rows = table.getRowModel().rows;
 
     // Density / sizing
@@ -206,8 +234,6 @@ export function NetworkBankTable({
         COL_W.ltoi +
         COL_W.jam;
 
-    console.log("sum COL_W =", tableWidth, "fixed =", FIXED_TABLE_WIDTH);
-
     return (
         <Paper elevation={1}>
             <Typography sx={{ p: 1.5 }} variant="subtitle1">
@@ -236,12 +262,18 @@ export function NetworkBankTable({
                             <TableRow key={hg.id}>
                                 {hg.headers.map((header) => {
                                     const id = header.column.id as keyof typeof COL_W;
+                                    const canSort = header.column.getCanSort();
+
+                                    console.log(header.column.id, "canSort:", header.column.getCanSort());
 
                                     return (
                                         <TableCell
                                             align="center"
+                                            onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                                             key={header.id}
                                             sx={{
+                                                cursor: header.column.getCanSort() ? "pointer" : "default",
+                                                userSelect: "none",
                                                 width: COL_W[id] ?? 120,
                                                 minWidth: COL_W[id] ?? 120,
                                                 maxWidth: COL_W[id] ?? 120,
